@@ -1,5 +1,8 @@
 // Use the global Pulsar object provided by Supernova
 Pulsar.export(async (sdk, context) => {
+  // Check if FileHelper is available in the sandbox
+  const hasFileHelper = typeof FileHelper !== 'undefined';
+  console.log('FileHelper available:', hasFileHelper);
   // Get design system and tokens
   const designSystem = await sdk.designSystems.designSystem(context.dsId);
   if (!designSystem) {
@@ -149,12 +152,24 @@ ${tokenElements}
   const xamlOutput = generateXamlContent(finalTokens);
 
   // Return result using Supernova's FileHelper (as per documentation)
-  return [
-    {
-      relativePath: "./",
-      fileName: "DesignTokens.xaml",
-      content: xamlOutput,
-      type: "text"
-    }
-  ];
+  if (typeof FileHelper !== 'undefined') {
+    return [
+      FileHelper.createTextFile({
+        relativePath: "./",
+        fileName: "DesignTokens.xaml",
+        content: xamlOutput,
+      })
+    ];
+  } else {
+    // Fallback to plain object if FileHelper not available in sandbox
+    console.log('Using fallback output format');
+    return [
+      {
+        relativePath: "./",
+        fileName: "DesignTokens.xaml",
+        content: xamlOutput,
+        type: "text"
+      }
+    ];
+  }
 });
