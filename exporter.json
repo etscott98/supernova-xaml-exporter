@@ -15,8 +15,6 @@
     "pulsar": "1.0.0",
     "supernova": "1.0.0"
   },
-  "config": {
-    "js": "index.js",
-    "sources": "sources.json"
-  }
+  "executable": "./index.js",
+  "engine": "latest"
 }
