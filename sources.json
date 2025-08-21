@@ -1,6 +1,7 @@
 {
   "sources": [
     {
+      "id": "xaml-tokens",
       "name": "XAML ResourceDictionary",
       "description": "Exports design tokens as a XAML ResourceDictionary for WPF/UWP applications",
       "blueprint": "index.js",

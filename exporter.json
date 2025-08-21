@@ -17,6 +17,7 @@
   },
   "config": {
     "js": "index.js",
-    "sources": "sources.json"
+    "sources": "sources.json",
+    "output": "output.json"
   }
 }
