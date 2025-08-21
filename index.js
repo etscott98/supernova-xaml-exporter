@@ -6,10 +6,31 @@ Pulsar.export(async (sdk, context) => {
     throw new Error(`Design system with ID ${context.dsId} not found`);
   }
   
-  const tokens = await sdk.tokens.getTokens({
+  // Fetch data from design system that is currently being exported (context)
+  const remoteVersionIdentifier = {
     designSystemId: context.dsId,
-    versionId: context.versionId
-  });
+    versionId: context.versionId,
+  };
+
+  // Fetch the necessary data
+  let tokens = await sdk.tokens.getTokens(remoteVersionIdentifier);
+
+  // Apply theme, if specified by the pipeline configuration (as per documentation)
+  if (context.themeId) {
+    console.log('Theme ID specified:', context.themeId);
+    try {
+      const themes = await sdk.tokens.getTokenThemes(remoteVersionIdentifier);
+      const theme = themes.find((theme) => theme.id === context.themeId);
+      if (theme) {
+        console.log('Applying theme:', theme.name);
+        tokens = await sdk.tokens.computeTokensByApplyingThemes(tokens, [theme]);
+      } else {
+        console.warn('Theme not found, using default tokens');
+      }
+    } catch (error) {
+      console.warn('Error applying theme, using default tokens:', error.message);
+    }
+  }
 
   // Debug: Log all tokens to understand the structure
   console.log('Total tokens found:', tokens.length);
@@ -127,11 +148,13 @@ ${tokenElements}
   // Generate final XAML
   const xamlOutput = generateXamlContent(finalTokens);
 
-  // Return result using Supernova's output format
-  return [{
-    path: "/",
-    name: "DesignTokens.xaml", 
-    content: xamlOutput,
-    type: "text"
-  }];
+  // Return result using Supernova's FileHelper (as per documentation)
+  return [
+    {
+      relativePath: "./",
+      fileName: "DesignTokens.xaml",
+      content: xamlOutput,
+      type: "text"
+    }
+  ];
 });
