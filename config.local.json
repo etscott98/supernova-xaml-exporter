@@ -1,0 +1,6 @@
+{
+  "includeAllTokenTypes": true,
+  "groupByTokenType": true,
+  "tokenNamePrefix": "",
+  "fileNameTemplate": "DesignTokens"
+}

@@ -2,7 +2,7 @@
   {
     "key": "includeAllTokenTypes",
     "type": "boolean",
-    "default": false,
+    "default": true,
     "title": "Include All Token Types",
     "description": "When enabled, exports all token types (not just colors) as XAML resources with appropriate type conversion"
   },
