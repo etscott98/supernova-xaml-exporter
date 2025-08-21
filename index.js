@@ -65,11 +65,31 @@ Pulsar.export(async (sdk, context) => {
 
   // Helper function to extract dimension values
   const extractDimensionValue = (token) => {
+    console.log('Extracting dimension value from:', token.name, token.value);
+    
     if (token.value && typeof token.value === 'object') {
-      if (token.value.measure !== undefined && token.value.unit) {
-        return `${token.value.measure}${token.value.unit}`;
+      if (token.value.measure !== undefined) {
+        // Handle unit mapping
+        let unit = token.value.unit || 'px';
+        if (unit === 'Pixels') unit = 'px';
+        if (unit === 'Raw') unit = ''; // Raw values have no unit
+        
+        const measure = token.value.measure;
+        
+        // For Raw units (like opacity), return just the number
+        if (token.value.unit === 'Raw') {
+          return measure.toString();
+        }
+        
+        return `${measure}${unit}`;
       }
     }
+    
+    // Fallback to string representation
+    if (typeof token.value === 'string') {
+      return token.value;
+    }
+    
     return token.value || '0px';
   };
 
@@ -147,6 +167,7 @@ Pulsar.export(async (sdk, context) => {
   let filteredTokens;
   if (exportConfiguration.includeAllTokenTypes) {
     // Include all token types
+    console.log('Including all token types');
     filteredTokens = tokens.map(token => ({
       name: sanitizeTokenName(token.name),
       value: extractTokenValue(token),
@@ -154,15 +175,30 @@ Pulsar.export(async (sdk, context) => {
       groupId: token.parentGroupId || 'ungrouped'
     }));
   } else {
-    // Default: only color tokens
+    // Check what token types we actually have
+    const tokenTypes = [...new Set(tokens.map(t => t.tokenType))];
+    console.log('Available token types:', tokenTypes);
+    
+    // Default: only color tokens, but let's be more flexible with the filtering
     filteredTokens = tokens
       .filter(token => {
         console.log('Token:', token.name, 'Type:', token.tokenType);
-        return token.tokenType === 'color';
+        // Try different variations of color type
+        const isColor = token.tokenType === 'color' || 
+                       token.tokenType === 'Color' || 
+                       token.tokenType === 'COLOR';
+        
+        // If no colors found but we have other tokens, include all for now
+        if (!isColor && tokenTypes.length > 0 && !tokenTypes.includes('color') && !tokenTypes.includes('Color')) {
+          console.log('No color tokens found, including all token types automatically');
+          return true; // Include all tokens if no colors exist
+        }
+        
+        return isColor;
       })
       .map(token => {
-        console.log('Processing color token:', token.name);
-        const value = extractColorValue(token);
+        console.log('Processing token:', token.name, 'Type:', token.tokenType);
+        const value = extractTokenValue(token);
         return {
           name: sanitizeTokenName(token.name),
           value: value,
@@ -247,12 +283,18 @@ Pulsar.export(async (sdk, context) => {
 
     const getXamlType = (tokenType) => {
       switch (tokenType) {
-        case 'color': return 'Color';
+        case 'color': 
+        case 'Color': return 'Color';
         case 'dimension':
         case 'spacing':
-        case 'sizing': return 'sys:Double';
+        case 'sizing':
+        case 'space':
+        case 'size': return 'sys:Double';
         case 'typography': return 'sys:String';
-        default: return 'sys:String';
+        case 'opacity': return 'sys:Double';
+        default: 
+          console.log('Unknown token type:', tokenType, '- defaulting to sys:String');
+          return 'sys:String';
       }
     };
 
