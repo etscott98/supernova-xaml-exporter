@@ -15,6 +15,62 @@ Pulsar.export(async (sdk, context) => {
   console.log('Total tokens found:', tokens.length);
   console.log('First token sample:', tokens[0]);
   
+  // Helper function to extract color value from token
+  const extractColorValue = (token) => {
+    console.log('Extracting value from token:', token.name, 'Token object:', token);
+    
+    // Try different ways to get the color value
+    if (token.toHex6) {
+      return token.toHex6();
+    }
+    if (token.toHex8) {
+      return token.toHex8();
+    }
+    if (token.value) {
+      // If value is an object, try to extract color information
+      if (typeof token.value === 'object') {
+        if (token.value.color) {
+          // Handle nested color object
+          const color = token.value.color;
+          if (typeof color === 'string') {
+            return color;
+          }
+          if (color.r !== undefined && color.g !== undefined && color.b !== undefined) {
+            // Convert RGB to hex
+            const r = Math.round(color.r * 255);
+            const g = Math.round(color.g * 255);
+            const b = Math.round(color.b * 255);
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+          }
+        }
+        if (token.value.hex) {
+          return token.value.hex;
+        }
+        // Return the stringified object for debugging
+        return JSON.stringify(token.value);
+      }
+      return token.value;
+    }
+    return '#000000'; // Fallback
+  };
+
+  // Helper function to sanitize token names for XAML keys
+  const sanitizeTokenName = (name) => {
+    if (!name) return 'UnknownToken';
+    
+    // Replace invalid characters and ensure it starts with a letter
+    let sanitized = name
+      .replace(/[^a-zA-Z0-9_]/g, '_') // Replace invalid chars with underscore
+      .replace(/^[0-9]/, 'Token_$&'); // Prefix numbers with "Token_"
+    
+    // Ensure it's not empty and starts with a letter
+    if (!sanitized || /^[0-9]/.test(sanitized)) {
+      sanitized = 'Token_' + sanitized;
+    }
+    
+    return sanitized || 'UnknownToken';
+  };
+
   // Filter color tokens
   const colorTokens = tokens
     .filter(token => {
@@ -23,9 +79,10 @@ Pulsar.export(async (sdk, context) => {
     })
     .map(token => {
       console.log('Processing color token:', token.name);
+      const value = extractColorValue(token);
       return {
-        name: token.name.replace(/\s+/g, ""),
-        value: token.toHex6 ? token.toHex6() : (token.value ? token.value : '#000000')
+        name: sanitizeTokenName(token.name),
+        value: value
       };
     });
   
@@ -37,8 +94,8 @@ Pulsar.export(async (sdk, context) => {
   if (colorTokens.length === 0) {
     console.log('No color tokens found, using all tokens for debugging');
     finalTokens = tokens.slice(0, 5).map(token => ({
-      name: token.name ? token.name.replace(/\s+/g, "") : 'UnknownToken',
-      value: token.value || token.tokenType || 'unknown'
+      name: sanitizeTokenName(token.name),
+      value: extractColorValue(token)
     }));
   }
 
