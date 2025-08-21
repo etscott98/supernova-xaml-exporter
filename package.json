@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "build": "tsc index.ts --target es2020 --module commonjs --outDir . --moduleResolution node --esModuleInterop --skipLibCheck",
+    "dev": "npm run build && echo 'Built successfully - index.js ready for Supernova'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,5 +16,8 @@
     "@supernovaio/sdk-exporters": "^2.2.27",
     "@types/node": "^24.3.0",
     "handlebars": "^4.7.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
   }
 }

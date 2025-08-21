@@ -1,0 +1,20 @@
+{
+  "id": "com.supernova.xaml-token-exporter",
+  "name": "XAML Token Exporter",
+  "description": "Exports design tokens to a XAML ResourceDictionary format for use in WPF, UWP, and other .NET applications.",
+  "author": "ErinScott",
+  "organization": "",
+  "version": "1.0.0",
+  "homepage": "",
+  "usesBrands": false,
+  "usesThemes": false,
+  "exporterType": "code",
+  "tags": ["tokens", "xaml", "wpf", "uwp", "dotnet", "csharp"],
+  "engines": {
+    "pulsar": "1.0.0",
+    "supernova": "1.0.0"
+  },
+  "config": {
+    "js": "index.js"
+  }
+}
