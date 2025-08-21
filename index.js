@@ -170,10 +170,8 @@ Pulsar.export(async (sdk, context) => {
     // Preserve the original name as much as possible
     let baseName = name;
     
-    // If it's just a number, add more context
-    if (/^\d+\.?\d*$/.test(name.trim())) {
-      baseName = `Value_${name}`;
-    }
+    // Keep numbers as they are - no need for "Value_" prefix
+    baseName = name;
     
     // Build full name with scope if available
     let fullName = '';
@@ -369,7 +367,17 @@ Pulsar.export(async (sdk, context) => {
     if (exportConfiguration.includeTokenGroups && Object.keys(groupedTokens).length > 1) {
       // Generate with group sections
       for (const [groupKey, groupTokens] of Object.entries(groupedTokens)) {
-        xamlContent += `    <!-- ${groupKey.charAt(0).toUpperCase() + groupKey.slice(1)} Tokens -->\n`;
+        // Try to get the actual group name instead of using the ID
+        let groupDisplayName = groupKey;
+        if (groupTokens.length > 0 && groupTokens[0].groupName) {
+          groupDisplayName = groupTokens[0].groupName;
+        } else if (groupKey !== 'ungrouped' && groupKey !== 'default') {
+          // If we have a group ID, try to make it more readable
+          groupDisplayName = groupKey.replace(/-/g, ' ').replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/g, 'Group');
+        }
+        
+        const formattedGroupName = groupDisplayName.charAt(0).toUpperCase() + groupDisplayName.slice(1);
+        xamlContent += `    <!-- ${formattedGroupName} Tokens -->\n`;
         xamlContent += groupTokens.map(generateTokenElement).join('\n') + '\n\n';
       }
     } else {
