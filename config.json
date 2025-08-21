@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "key": "includeAllTokenTypes",
+    "type": "boolean",
+    "default": false,
+    "title": "Include All Token Types",
+    "description": "When enabled, exports all token types (not just colors) as XAML resources with appropriate type conversion"
+  },
+  {
+    "key": "maxTokensPerFile",
+    "type": "number",
+    "default": 1000,
+    "title": "Max Tokens Per File",
+    "description": "Maximum number of tokens to include in a single XAML file. Larger token sets will be split into multiple files"
+  },
+  {
+    "key": "groupByTokenType",
+    "type": "boolean",
+    "default": false,
+    "title": "Group By Token Type",
+    "description": "When enabled, creates separate XAML files for each token type (Colors.xaml, Typography.xaml, etc.)"
+  },
+  {
+    "key": "includeTokenGroups",
+    "type": "boolean",
+    "default": true,
+    "title": "Include Token Groups",
+    "description": "When enabled, organizes tokens into ResourceDictionary sections based on their groups"
+  },
+  {
+    "key": "tokenNamePrefix",
+    "type": "string",
+    "default": "",
+    "title": "Token Name Prefix",
+    "description": "Prefix to add to all token names (e.g., 'DS_' for DesignSystem prefix)"
+  },
+  {
+    "key": "fileNameTemplate",
+    "type": "string",
+    "default": "DesignTokens",
+    "title": "File Name Template",
+    "description": "Base name for generated XAML files. Will be suffixed with token type when grouping is enabled"
+  }
+]

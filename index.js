@@ -1,5 +1,9 @@
 // Use the global Pulsar object provided by Supernova
 Pulsar.export(async (sdk, context) => {
+  // Get configuration (as per documentation)
+  const exportConfiguration = Pulsar.exportConfig();
+  console.log('Export configuration:', exportConfiguration);
+  
   // Check if FileHelper is available in the sandbox
   const hasFileHelper = typeof FileHelper !== 'undefined';
   console.log('FileHelper available:', hasFileHelper);
@@ -39,6 +43,50 @@ Pulsar.export(async (sdk, context) => {
   console.log('Total tokens found:', tokens.length);
   console.log('First token sample:', tokens[0]);
   
+  // Helper function to extract value from any token type
+  const extractTokenValue = (token) => {
+    console.log('Extracting value from token:', token.name, 'Type:', token.tokenType);
+    
+    // Handle different token types
+    switch (token.tokenType) {
+      case 'color':
+        return extractColorValue(token);
+      case 'dimension':
+      case 'spacing':
+      case 'sizing':
+        return extractDimensionValue(token);
+      case 'typography':
+        return extractTypographyValue(token);
+      default:
+        // Fallback for unknown types
+        return extractColorValue(token);
+    }
+  };
+
+  // Helper function to extract dimension values
+  const extractDimensionValue = (token) => {
+    if (token.value && typeof token.value === 'object') {
+      if (token.value.measure !== undefined && token.value.unit) {
+        return `${token.value.measure}${token.value.unit}`;
+      }
+    }
+    return token.value || '0px';
+  };
+
+  // Helper function to extract typography values
+  const extractTypographyValue = (token) => {
+    if (token.value && typeof token.value === 'object') {
+      // Return a font family or size string
+      if (token.value.fontFamily) {
+        return token.value.fontFamily;
+      }
+      if (token.value.fontSize) {
+        return `${token.value.fontSize.measure || token.value.fontSize}${token.value.fontSize.unit || 'px'}`;
+      }
+    }
+    return token.value || 'Arial';
+  };
+
   // Helper function to extract color value from token
   const extractColorValue = (token) => {
     console.log('Extracting value from token:', token.name, 'Token object:', token);
@@ -95,36 +143,78 @@ Pulsar.export(async (sdk, context) => {
     return sanitized || 'UnknownToken';
   };
 
-  // Filter color tokens
-  const colorTokens = tokens
-    .filter(token => {
-      console.log('Token:', token.name, 'Type:', token.tokenType);
-      return token.tokenType === 'color';
-    })
-    .map(token => {
-      console.log('Processing color token:', token.name);
-      const value = extractColorValue(token);
-      return {
-        name: sanitizeTokenName(token.name),
-        value: value
-      };
-    });
-  
-  console.log('Color tokens found:', colorTokens.length);
-  console.log('Color tokens:', colorTokens);
-
-  // If no color tokens found, let's try all tokens as a fallback for debugging
-  let finalTokens = colorTokens;
-  if (colorTokens.length === 0) {
-    console.log('No color tokens found, using all tokens for debugging');
-    finalTokens = tokens.slice(0, 5).map(token => ({
+  // Filter tokens based on configuration
+  let filteredTokens;
+  if (exportConfiguration.includeAllTokenTypes) {
+    // Include all token types
+    filteredTokens = tokens.map(token => ({
       name: sanitizeTokenName(token.name),
-      value: extractColorValue(token)
+      value: extractTokenValue(token),
+      type: token.tokenType,
+      groupId: token.parentGroupId || 'ungrouped'
+    }));
+  } else {
+    // Default: only color tokens
+    filteredTokens = tokens
+      .filter(token => {
+        console.log('Token:', token.name, 'Type:', token.tokenType);
+        return token.tokenType === 'color';
+      })
+      .map(token => {
+        console.log('Processing color token:', token.name);
+        const value = extractColorValue(token);
+        return {
+          name: sanitizeTokenName(token.name),
+          value: value,
+          type: token.tokenType,
+          groupId: token.parentGroupId || 'ungrouped'
+        };
+      });
+  }
+
+  // Apply name prefix if configured
+  if (exportConfiguration.tokenNamePrefix) {
+    filteredTokens = filteredTokens.map(token => ({
+      ...token,
+      name: exportConfiguration.tokenNamePrefix + token.name
     }));
   }
 
+  console.log('Filtered tokens found:', filteredTokens.length);
+  console.log('Filtered tokens:', filteredTokens);
+
+  // If no tokens found, use fallback for debugging
+  let finalTokens = filteredTokens;
+  if (filteredTokens.length === 0) {
+    console.log('No tokens found, using fallback for debugging');
+    finalTokens = tokens.slice(0, 5).map(token => ({
+      name: sanitizeTokenName(token.name),
+      value: extractColorValue(token),
+      type: token.tokenType || 'unknown',
+      groupId: 'debug'
+    }));
+  }
+
+  // Helper function to create output file with proper format
+  const createOutputFile = ({ fileName, content, hasFileHelper }) => {
+    if (hasFileHelper) {
+      return FileHelper.createTextFile({
+        relativePath: "./",
+        fileName: fileName,
+        content: content,
+      });
+    } else {
+      return {
+        relativePath: "./",
+        fileName: fileName,
+        content: content,
+        type: "text"
+      };
+    }
+  };
+
   // Generate XAML directly without Handlebars
-  const generateXamlContent = (tokens) => {
+  const generateXamlContent = (tokens, tokenType = null) => {
     if (tokens.length === 0) {
       return `<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -135,41 +225,114 @@ Pulsar.export(async (sdk, context) => {
 </ResourceDictionary>`;
     }
 
-    const tokenElements = tokens.map(token => 
-      `    <Color x:Key="${token.name}">${token.value}</Color>`
-    ).join('\n');
+    // Group tokens by group if enabled
+    let groupedTokens = { 'default': tokens };
+    if (exportConfiguration.includeTokenGroups) {
+      groupedTokens = {};
+      tokens.forEach(token => {
+        const groupKey = token.groupId || 'ungrouped';
+        if (!groupedTokens[groupKey]) {
+          groupedTokens[groupKey] = [];
+        }
+        groupedTokens[groupKey].push(token);
+      });
+    }
 
-    return `<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    // Generate token elements with grouping
+    const generateTokenElement = (token) => {
+      const xamlType = getXamlType(token.type);
+      return `    <${xamlType} x:Key="${token.name}">${token.value}</${xamlType}>`;
+    };
+
+    const getXamlType = (tokenType) => {
+      switch (tokenType) {
+        case 'color': return 'Color';
+        case 'dimension':
+        case 'spacing':
+        case 'sizing': return 'sys:Double';
+        case 'typography': return 'sys:String';
+        default: return 'sys:String';
+      }
+    };
+
+    let xamlContent = '';
+    if (exportConfiguration.includeTokenGroups && Object.keys(groupedTokens).length > 1) {
+      // Generate with group sections
+      for (const [groupKey, groupTokens] of Object.entries(groupedTokens)) {
+        xamlContent += `    <!-- ${groupKey.charAt(0).toUpperCase() + groupKey.slice(1)} Tokens -->\n`;
+        xamlContent += groupTokens.map(generateTokenElement).join('\n') + '\n\n';
+      }
+    } else {
+      // Generate flat structure
+      xamlContent = tokens.map(generateTokenElement).join('\n');
+    }
+
+    const typeComment = tokenType ? `${tokenType.charAt(0).toUpperCase() + tokenType.slice(1)} ` : '';
+    const namespaces = tokens.some(t => t.type !== 'color') 
+      ? `xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"`
+      : `xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"`;
+
+    return `<ResourceDictionary ${namespaces}>
     
-    <!-- Design System Color Tokens -->
-${tokenElements}
-
+    <!-- Design System ${typeComment}Tokens -->
+${xamlContent}
 </ResourceDictionary>`;
   };
 
-  // Generate final XAML
-  const xamlOutput = generateXamlContent(finalTokens);
-
-  // Return result using Supernova's FileHelper (as per documentation)
-  if (typeof FileHelper !== 'undefined') {
-    return [
-      FileHelper.createTextFile({
-        relativePath: "./",
-        fileName: "DesignTokens.xaml",
-        content: xamlOutput,
-      })
-    ];
-  } else {
-    // Fallback to plain object if FileHelper not available in sandbox
-    console.log('Using fallback output format');
-    return [
-      {
-        relativePath: "./",
-        fileName: "DesignTokens.xaml",
-        content: xamlOutput,
-        type: "text"
+  // Handle multiple files based on configuration
+  const outputFiles = [];
+  
+  if (exportConfiguration.groupByTokenType) {
+    // Group tokens by type and create separate files
+    const tokensByType = {};
+    finalTokens.forEach(token => {
+      if (!tokensByType[token.type]) {
+        tokensByType[token.type] = [];
       }
-    ];
+      tokensByType[token.type].push(token);
+    });
+    
+    for (const [tokenType, typeTokens] of Object.entries(tokensByType)) {
+      const fileName = `${exportConfiguration.fileNameTemplate}_${tokenType}.xaml`;
+      const xamlContent = generateXamlContent(typeTokens, tokenType);
+      
+      outputFiles.push(createOutputFile({
+        fileName: fileName,
+        content: xamlContent,
+        hasFileHelper: hasFileHelper
+      }));
+    }
+  } else if (finalTokens.length > exportConfiguration.maxTokensPerFile) {
+    // Split into multiple files based on token count
+    const chunks = [];
+    for (let i = 0; i < finalTokens.length; i += exportConfiguration.maxTokensPerFile) {
+      chunks.push(finalTokens.slice(i, i + exportConfiguration.maxTokensPerFile));
+    }
+    
+    chunks.forEach((chunk, index) => {
+      const fileName = `${exportConfiguration.fileNameTemplate}_${index + 1}.xaml`;
+      const xamlContent = generateXamlContent(chunk);
+      
+      outputFiles.push(createOutputFile({
+        fileName: fileName,
+        content: xamlContent,
+        hasFileHelper: hasFileHelper
+      }));
+    });
+  } else {
+    // Single file output
+    const fileName = `${exportConfiguration.fileNameTemplate}.xaml`;
+    const xamlContent = generateXamlContent(finalTokens);
+    
+    outputFiles.push(createOutputFile({
+      fileName: fileName,
+      content: xamlContent,
+      hasFileHelper: hasFileHelper
+    }));
   }
+
+  return outputFiles;
 });
