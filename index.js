@@ -204,9 +204,10 @@ Pulsar.export(async (sdk, context) => {
         content: content,
       });
     } else {
+      // Fallback format that matches Supernova's requirements
       return {
-        relativePath: "./",
-        fileName: fileName,
+        path: "./",
+        name: fileName,
         content: content,
         type: "text"
       };
