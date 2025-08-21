@@ -16,6 +16,7 @@
     "supernova": "1.0.0"
   },
   "config": {
-    "js": "index.js"
+    "js": "index.js",
+    "sources": "sources.json"
   }
 }
