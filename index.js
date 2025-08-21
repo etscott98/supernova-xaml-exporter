@@ -1,9 +1,5 @@
 // Use the global Pulsar object provided by Supernova
 Pulsar.export(async (sdk, context) => {
-  const fs = require('fs');
-  const path = require('path');
-  const handlebars = require('handlebars');
-
   // Get design system and tokens
   const designSystem = await sdk.designSystems.designSystem(context.dsId);
   if (!designSystem) {
@@ -25,13 +21,23 @@ Pulsar.export(async (sdk, context) => {
       };
     });
 
-  // Load and compile Handlebars template
-  const templatePath = path.join(__dirname, "templates", "xaml-template.handlebars");
-  const templateContent = fs.readFileSync(templatePath, "utf-8");
-  const compiledTemplate = handlebars.compile(templateContent);
+  // Generate XAML directly without Handlebars
+  const generateXamlContent = (tokens) => {
+    const tokenElements = tokens.map(token => 
+      `    <Color x:Key="${token.name}">${token.value}</Color>`
+    ).join('\n');
+
+    return `<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <!-- Design System Color Tokens -->
+${tokenElements}
+
+</ResourceDictionary>`;
+  };
 
   // Generate final XAML
-  const xamlOutput = compiledTemplate({ tokens: colorTokens });
+  const xamlOutput = generateXamlContent(colorTokens);
 
   // Return result using Supernova's output format
   return [{
