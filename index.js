@@ -8,14 +8,14 @@ Pulsar.export(async (sdk, context) => {
   const hasFileHelper = typeof FileHelper !== 'undefined';
   console.log('FileHelper available:', hasFileHelper);
   // Get design system and tokens
-  const designSystem = await sdk.designSystems.designSystem(context.dsId);
-  if (!designSystem) {
-    throw new Error(`Design system with ID ${context.dsId} not found`);
-  }
+    const designSystem = await sdk.designSystems.designSystem(context.dsId);
+    if (!designSystem) {
+        throw new Error(`Design system with ID ${context.dsId} not found`);
+    }
   
   // Fetch data from design system that is currently being exported (context)
   const remoteVersionIdentifier = {
-    designSystemId: context.dsId,
+        designSystemId: context.dsId,
     versionId: context.versionId,
   };
 
@@ -146,21 +146,74 @@ Pulsar.export(async (sdk, context) => {
     return '#000000'; // Fallback
   };
 
-  // Helper function to sanitize token names for XAML keys
-  const sanitizeTokenName = (name) => {
+  // Helper function to get token group/scope name
+  const getTokenGroupName = async (token) => {
+    try {
+      if (token.parentGroupId) {
+        // Try to get the group information
+        const tokenGroups = await sdk.tokens.getTokenGroups(remoteVersionIdentifier);
+        const group = tokenGroups.find(g => g.id === token.parentGroupId);
+        if (group && group.name) {
+          return group.name;
+        }
+      }
+    } catch (error) {
+      console.warn('Could not fetch token groups:', error.message);
+    }
+    return null;
+  };
+
+  // Helper function to sanitize token names for XAML keys while preserving meaning
+  const sanitizeTokenName = (name, groupName = null) => {
     if (!name) return 'UnknownToken';
     
-    // Replace invalid characters and ensure it starts with a letter
-    let sanitized = name
-      .replace(/[^a-zA-Z0-9_]/g, '_') // Replace invalid chars with underscore
-      .replace(/^[0-9]/, 'Token_$&'); // Prefix numbers with "Token_"
+    // Preserve the original name as much as possible
+    let baseName = name;
     
-    // Ensure it's not empty and starts with a letter
-    if (!sanitized || /^[0-9]/.test(sanitized)) {
+    // If it's just a number, add more context
+    if (/^\d+\.?\d*$/.test(name.trim())) {
+      baseName = `Value_${name}`;
+    }
+    
+    // Build full name with scope if available
+    let fullName = '';
+    if (groupName && exportConfiguration.includeTokenGroups) {
+      // Add group name as prefix
+      const cleanGroupName = groupName.replace(/[^a-zA-Z0-9]/g, '_');
+      fullName = `${cleanGroupName}_${baseName}`;
+    } else {
+      fullName = baseName;
+    }
+    
+    // Clean the full name for XAML compatibility
+    let sanitized = fullName
+      .replace(/[^a-zA-Z0-9_]/g, '_') // Replace invalid chars with underscore
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+    
+    // Ensure it starts with a letter
+    if (/^[0-9]/.test(sanitized)) {
       sanitized = 'Token_' + sanitized;
     }
     
+    // Ensure it's not empty
     return sanitized || 'UnknownToken';
+  };
+
+  // Get token groups for name resolution
+  let tokenGroups = [];
+  try {
+    tokenGroups = await sdk.tokens.getTokenGroups(remoteVersionIdentifier);
+    console.log('Token groups found:', tokenGroups.length);
+  } catch (error) {
+    console.warn('Could not fetch token groups:', error.message);
+  }
+
+  // Helper to get group name by ID
+  const getGroupNameById = (groupId) => {
+    if (!groupId) return null;
+    const group = tokenGroups.find(g => g.id === groupId);
+    return group ? group.name : null;
   };
 
   // Filter tokens based on configuration
@@ -168,12 +221,18 @@ Pulsar.export(async (sdk, context) => {
   if (exportConfiguration.includeAllTokenTypes) {
     // Include all token types
     console.log('Including all token types');
-    filteredTokens = tokens.map(token => ({
-      name: sanitizeTokenName(token.name),
-      value: extractTokenValue(token),
-      type: token.tokenType,
-      groupId: token.parentGroupId || 'ungrouped'
-    }));
+    filteredTokens = tokens.map(token => {
+      const groupName = getGroupNameById(token.parentGroupId);
+      console.log('Processing token:', token.name, 'Group:', groupName, 'Type:', token.tokenType);
+      return {
+        name: sanitizeTokenName(token.name, groupName),
+        value: extractTokenValue(token),
+        type: token.tokenType,
+        groupId: token.parentGroupId || 'ungrouped',
+        originalName: token.name,
+        groupName: groupName
+      };
+    });
   } else {
     // Check what token types we actually have
     const tokenTypes = [...new Set(tokens.map(t => t.tokenType))];
@@ -196,16 +255,19 @@ Pulsar.export(async (sdk, context) => {
         
         return isColor;
       })
-      .map(token => {
-        console.log('Processing token:', token.name, 'Type:', token.tokenType);
+        .map(token => {
+        const groupName = getGroupNameById(token.parentGroupId);
+        console.log('Processing token:', token.name, 'Group:', groupName, 'Type:', token.tokenType);
         const value = extractTokenValue(token);
         return {
-          name: sanitizeTokenName(token.name),
+          name: sanitizeTokenName(token.name, groupName),
           value: value,
           type: token.tokenType,
-          groupId: token.parentGroupId || 'ungrouped'
+          groupId: token.parentGroupId || 'ungrouped',
+          originalName: token.name,
+          groupName: groupName
         };
-      });
+    });
   }
 
   // Apply name prefix if configured
@@ -223,12 +285,17 @@ Pulsar.export(async (sdk, context) => {
   let finalTokens = filteredTokens;
   if (filteredTokens.length === 0) {
     console.log('No tokens found, using fallback for debugging');
-    finalTokens = tokens.slice(0, 5).map(token => ({
-      name: sanitizeTokenName(token.name),
-      value: extractColorValue(token),
-      type: token.tokenType || 'unknown',
-      groupId: 'debug'
-    }));
+    finalTokens = tokens.slice(0, 5).map(token => {
+      const groupName = getGroupNameById(token.parentGroupId);
+      return {
+        name: sanitizeTokenName(token.name, groupName),
+        value: extractColorValue(token),
+        type: token.tokenType || 'unknown',
+        groupId: 'debug',
+        originalName: token.name,
+        groupName: groupName
+      };
+    });
   }
 
   // Helper function to create output file with proper format
