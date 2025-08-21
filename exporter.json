@@ -4,6 +4,7 @@
   "description": "Exports design tokens to a XAML ResourceDictionary format for use in WPF, UWP, and other .NET applications.",
   "author": "ErinScott",
   "organization": "",
+  "source_dir": ".",
   "version": "1.0.0",
   "homepage": "",
   "usesBrands": false,
